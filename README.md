@@ -1,7 +1,5 @@
 ### Hi there 👋
 
-**JarJarFran/JarJarFran** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
-
 # 💫 About Me:
 I'm currently working as a Data Engineer and Data Analytic.
 <br>Looking to know more about Apache environment like Apache Kafka, Spark, NiFi and Flink.
