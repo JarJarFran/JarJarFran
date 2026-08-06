@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rutina IA · generador de rutinas de fuerza</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div>
+    <h1>Rutina IA</h1>
+    <p class="tagline">Rutinas de fuerza generadas con IA, validadas contra reglas de programación y seguridad.</p>
+  </div>
+  <p class="engine" id="engine-badge">…</p>
+</header>
+
+<main>
+  <section class="panel" id="form-panel">
+    <h2>Tu perfil</h2>
+    <form id="profile-form">
+      <div class="field">
+        <label for="goal">Objetivo</label>
+        <select id="goal" name="goal"></select>
+      </div>
+
+      <div class="field">
+        <label for="experience">Nivel</label>
+        <select id="experience" name="experience"></select>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="days">Días por semana</label>
+          <input type="number" id="days" name="days_per_week" min="1" max="6" value="3">
+        </div>
+        <div class="field">
+          <label for="minutes">Minutos por sesión</label>
+          <input type="number" id="minutes" name="session_minutes" min="20" max="150" step="5" value="60">
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="age">Edad <span class="opt">(opcional)</span></label>
+          <input type="number" id="age" name="age" min="12" max="100" placeholder="—">
+        </div>
+        <div class="field">
+          <label for="weight">Peso kg <span class="opt">(opcional)</span></label>
+          <input type="number" id="weight" name="bodyweight_kg" min="25" max="250" step="0.5" placeholder="—">
+        </div>
+      </div>
+
+      <fieldset class="field">
+        <legend>Material disponible</legend>
+        <div class="chips" id="equipment"></div>
+      </fieldset>
+
+      <fieldset class="field">
+        <legend>Lesiones o articulaciones sensibles</legend>
+        <p class="hint">Los ejercicios que cargan lo que marques quedan fuera del catálogo antes de generar nada.</p>
+        <div class="chips" id="injuries"></div>
+      </fieldset>
+
+      <div class="field">
+        <label for="notes">Notas <span class="opt">(opcional)</span></label>
+        <textarea id="notes" name="notes" rows="3"
+          placeholder="Ej.: entreno por la mañana en ayunas, no tengo rack, quiero mejorar el press militar…"></textarea>
+      </div>
+
+      <button type="submit" class="primary" id="generate-btn">Generar rutina</button>
+    </form>
+  </section>
+
+  <section class="panel" id="result-panel">
+    <div class="empty" id="empty-state">
+      <p>Rellena el perfil y genera tu rutina.</p>
+      <p class="hint" id="catalog-note"></p>
+    </div>
+
+    <div id="routine" hidden>
+      <div class="routine-head">
+        <div>
+          <h2 id="routine-title"></h2>
+          <p class="lede" id="routine-summary"></p>
+        </div>
+        <div class="actions">
+          <button type="button" id="doc-btn">Ver documento</button>
+          <button type="button" id="md-btn">Descargar .md</button>
+        </div>
+      </div>
+
+      <div id="issues"></div>
+      <div id="day-list"></div>
+
+      <section class="adapt">
+        <h3>Pedir cambios</h3>
+        <p class="hint">Describe qué quieres cambiar. La rutina se rehace entera y se vuelve a validar.</p>
+        <div class="quick" id="quick-adapts"></div>
+        <form id="adapt-form">
+          <textarea id="adapt-text" rows="3"
+            placeholder="Ej.: me molesta el hombro en el press, cámbialo. O: solo puedo entrenar 45 minutos."></textarea>
+          <button type="submit" class="primary" id="adapt-btn">Aplicar cambio</button>
+        </form>
+        <ol class="history" id="history"></ol>
+      </section>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<footer class="sitefoot">
+  <p>
+    Ejercicios y GIF de <a href="https://github.com/hasaneyldrm/exercises-dataset">exercises-dataset</a>.
+    Material audiovisual © Gym visual — <a href="https://gymvisual.com/">gymvisual.com</a>.
+  </p>
+  <p>Material informativo de entrenamiento. No sustituye la valoración de un profesional sanitario.</p>
+</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
