@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ routine.title }}</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --fg: #16181d;
+    --muted: #5c6370;
+    --line: #e2e5ea;
+    --accent: #b3441a;
+    --panel: #f7f6f3;
+    --warn-bg: #fff5e6;
+    --warn-line: #e0a256;
+    --err-bg: #fdeceb;
+    --err-line: #d0553f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a; --fg: #e8e6e3; --muted: #9aa1ad; --line: #2a2e36;
+      --accent: #e27b4f; --panel: #1c1f25;
+      --warn-bg: #2e2415; --warn-line: #8a6220;
+      --err-bg: #2f1b18; --err-line: #a3462f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; padding: 2rem 1.25rem 4rem; max-width: 60rem;
+    background: var(--bg); color: var(--fg);
+    font: 16px/1.6 Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  }
+  h1, h2, h3 { line-height: 1.25; font-weight: 600; }
+  h1 { font-size: 2rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.35rem; margin: 2.5rem 0 .75rem; padding-bottom: .35rem;
+       border-bottom: 2px solid var(--line); }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 .5rem; }
+  p { margin: .6rem 0; }
+  .lede { color: var(--muted); font-size: 1.05rem; }
+  .meta { display: flex; flex-wrap: wrap; gap: .4rem .5rem; margin: 1rem 0 0; padding: 0; list-style: none; }
+  .meta li {
+    font: 500 .8rem/1 ui-sans-serif, system-ui, sans-serif;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 999px; padding: .35rem .7rem;
+  }
+  .notice { border-radius: 6px; padding: .85rem 1rem; margin: 1rem 0;
+            font-family: ui-sans-serif, system-ui, sans-serif; font-size: .9rem; }
+  .notice.aviso { background: var(--warn-bg); border-left: 4px solid var(--warn-line); }
+  .notice.error { background: var(--err-bg); border-left: 4px solid var(--err-line); }
+  .notice code { font-size: .85em; opacity: .75; }
+  .table-wrap { overflow-x: auto; margin: 1rem 0; }
+  table { border-collapse: collapse; width: 100%; min-width: 34rem;
+          font: .9rem/1.45 ui-sans-serif, system-ui, sans-serif; }
+  th, td { text-align: left; padding: .55rem .6rem; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; color: var(--muted); text-transform: uppercase;
+       font-size: .72rem; letter-spacing: .04em; }
+  tbody tr:last-child td { border-bottom: none; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .day { margin-top: 2.5rem; }
+  .day-meta { color: var(--muted); font-size: .9rem;
+              font-family: ui-sans-serif, system-ui, sans-serif; }
+  .exercise {
+    display: grid; grid-template-columns: 180px 1fr; gap: 1.25rem;
+    padding: 1.25rem 0; border-top: 1px solid var(--line);
+  }
+  @media (max-width: 640px) { .exercise { grid-template-columns: 1fr; } }
+  .exercise img {
+    width: 180px; height: 180px; max-width: 100%;
+    border-radius: 6px; background: var(--panel); border: 1px solid var(--line);
+  }
+  .exercise h3 { margin-top: 0; }
+  .tags { color: var(--muted); font-size: .85rem;
+          font-family: ui-sans-serif, system-ui, sans-serif; margin: 0 0 .5rem; }
+  .prescription {
+    font: 600 .95rem/1.4 ui-sans-serif, system-ui, sans-serif;
+    color: var(--accent); margin: 0 0 .5rem;
+  }
+  .cue { border-left: 3px solid var(--accent); padding-left: .75rem;
+         margin: .5rem 0; color: var(--muted); font-style: italic; }
+  ol.steps { margin: .5rem 0 0; padding-left: 1.2rem; font-size: .95rem; }
+  ol.steps li { margin: .3rem 0; }
+  footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--line);
+           color: var(--muted); font-size: .82rem;
+           font-family: ui-sans-serif, system-ui, sans-serif; }
+  a { color: var(--accent); }
+  @media print {
+    body { max-width: none; padding: 0; font-size: 11pt; }
+    .day { break-before: page; }
+    .exercise { break-inside: avoid; }
+    h2 { break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<h1>{{ routine.title }}</h1>
+<p class="lede">{{ routine.summary }}</p>
+
+<ul class="meta">
+  <li>{{ profile.days_per_week }} días/semana</li>
+  <li>{{ profile.session_minutes }} min/sesión</li>
+  <li>Nivel: {{ profile.experience }}</li>
+  <li>Objetivo: {{ routine.goal.replace('_', ' + ') }}</li>
+  <li>Bloque de {{ routine.weeks }} semanas</li>
+  <li>Material: {{ profile.equipment | join(', ') }}</li>
+  {% if profile.injuries %}
+  <li>Lesiones: {{ profile.injuries | join(', ') }}</li>
+  {% endif %}
+  <li>Generado por: {{ engine_label }}</li>
+</ul>
+
+{% if routine.safety_notes %}
+<h2>Antes de empezar</h2>
+{% for note in routine.safety_notes %}
+<div class="notice aviso">{{ note }}</div>
+{% endfor %}
+{% endif %}
+
+{% if issues %}
+<h2>Comprobaciones del validador</h2>
+{% for issue in issues %}
+<div class="notice {{ issue.severity }}">
+  <code>{{ issue.code }}</code> — {{ issue.message }}
+</div>
+{% endfor %}
+{% endif %}
+
+{% for entry in days %}
+<section class="day">
+  <h2>{{ entry.day.name }}</h2>
+  <p class="day-meta">{{ entry.day.focus }} · duración estimada ~{{ entry.minutes }} min</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Ejercicio</th><th>Rol</th>
+          <th class="num">Series × reps</th><th class="num">RIR</th><th class="num">Descanso</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in entry.blocks %}
+        <tr>
+          <td>{{ item.exercise.name }}</td>
+          <td>{{ item.block.role }}</td>
+          <td class="num">{{ item.block.sets }} × {{ item.block.reps }}</td>
+          <td class="num">{{ item.block.rir }}</td>
+          <td class="num">{{ item.block.rest_seconds }} s</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% for item in entry.blocks %}
+  <article class="exercise">
+    <img src="{{ item.gif }}" alt="Ejecución de {{ item.exercise.name }}" loading="lazy" width="180" height="180">
+    <div>
+      <h3>{{ item.exercise.name }}</h3>
+      <p class="tags">
+        {{ item.exercise.body_part_es }} · objetivo {{ item.exercise.target_es }} ·
+        {{ item.exercise.equipment_es }}
+        {%- if item.exercise.joints %} · carga {{ item.exercise.joints | join(', ') }}{% endif %}
+      </p>
+      <p class="prescription">
+        {{ item.block.sets }} series × {{ item.block.reps }} reps ·
+        RIR {{ item.block.rir }} · descanso {{ item.block.rest_seconds }} s
+      </p>
+      {% if item.block.notes %}
+      <p class="cue">{{ item.block.notes }}</p>
+      {% endif %}
+      <ol class="steps">
+        {% for step in item.exercise.steps_es %}
+        <li>{{ step }}</li>
+        {% endfor %}
+      </ol>
+    </div>
+  </article>
+  {% endfor %}
+</section>
+{% endfor %}
+
+<h2>Progresión</h2>
+<p>{{ routine.progression }}</p>
+
+{% if routine.deload %}
+<h2>Descarga</h2>
+<p>{{ routine.deload }}</p>
+{% endif %}
+
+<h2>Volumen semanal</h2>
+<p class="day-meta">
+  Series efectivas por grupo muscular. Los ejercicios compuestos cuentan
+  completos para su músculo objetivo y a la mitad para los sinergistas.
+</p>
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Grupo muscular</th><th class="num">Series/semana</th></tr></thead>
+    <tbody>
+      {% for group, sets in volume %}
+      <tr><td>{{ group }}</td><td class="num">{{ sets }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<footer>
+  <p>
+    GIF e imágenes de ejecución: <strong>{{ attribution }}</strong>.
+    Datos de ejercicios: <a href="{{ dataset_url }}">{{ dataset_url }}</a>.
+  </p>
+  <p>
+    Documento informativo de entrenamiento. No sustituye la valoración de un
+    profesional sanitario. Si aparece dolor durante un ejercicio, detenlo y
+    consulta antes de retomarlo.
+  </p>
+</footer>
+
+</body>
+</html>

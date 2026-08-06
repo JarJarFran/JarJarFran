@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.pytest_cache/
+.ruff_cache/
+
+# Copia local de los GIF (© Gym visual). Ver scripts/fetch_media.py: es
+# material de terceros, no debe versionarse en este repositorio.
+data/media/
