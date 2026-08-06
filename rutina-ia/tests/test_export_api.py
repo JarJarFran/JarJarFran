@@ -185,9 +185,8 @@ def test_detalle_de_ejercicio_inexistente(client):
     assert client.get("/api/exercises/0000").status_code == 404
 
 
-def test_adaptar_sin_clave_devuelve_400(client, profile, result, monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+def test_adaptar_sin_ningun_motor_devuelve_400(client, profile, result):
+    """Sin clave y sin Claude Code no hay forma de adaptar (conftest los quita)."""
     response = client.post(
         "/api/routines/adapt",
         json={
@@ -197,4 +196,78 @@ def test_adaptar_sin_clave_devuelve_400(client, profile, result, monkeypatch):
         },
     )
     assert response.status_code == 400
-    assert "ANTHROPIC_API_KEY" in response.json()["detail"]
+    assert "claude login" in response.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Selección de motor
+# ---------------------------------------------------------------------------
+
+
+def test_options_reporta_los_motores(client):
+    payload = client.get("/api/options").json()
+    engines = payload["engines"]
+    assert set(engines) == {"suscripcion", "api", "determinista"}
+    # El conftest deja el entorno sin credenciales ni CLI.
+    assert engines["suscripcion"]["available"] is False
+    assert engines["api"]["available"] is False
+    assert engines["determinista"]["available"] is True
+    assert payload["active_engine"] == "determinista"
+
+
+def test_auto_prefiere_la_suscripcion_a_la_api(monkeypatch):
+    """Si tienes Claude Code, generar no debería gastarte saldo de API."""
+    from rutina_ia.api import resolve_engine
+
+    monkeypatch.setattr("rutina_ia.claude_code.available", lambda: True)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-de-prueba")
+    assert resolve_engine("auto") == "suscripcion"
+
+
+def test_auto_cae_a_la_api_sin_claude_code(monkeypatch):
+    from rutina_ia.api import resolve_engine
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-de-prueba")
+    assert resolve_engine("auto") == "api"
+
+
+def test_auto_cae_al_determinista_sin_nada(client):
+    from rutina_ia.api import resolve_engine
+
+    assert resolve_engine("auto") == "determinista"
+
+
+def test_pedir_suscripcion_sin_cli_da_error_accionable(client, profile):
+    response = client.post(
+        "/api/routines",
+        json={"profile": profile.model_dump(), "engine": "suscripcion"},
+    )
+    assert response.status_code == 400
+    assert "claude login" in response.json()["detail"]
+
+
+def test_motor_desconocido_se_rechaza(client, profile):
+    response = client.post(
+        "/api/routines",
+        json={"profile": profile.model_dump(), "engine": "chatgpt"},
+    )
+    assert response.status_code == 400
+    assert "Motor desconocido" in response.json()["detail"]
+
+
+def test_variable_de_entorno_fija_el_motor(monkeypatch):
+    """RUTINA_IA_ENGINE gana sobre la detección automática."""
+    from rutina_ia import api, config
+
+    monkeypatch.setattr(config, "DEFAULT_ENGINE", "determinista")
+    monkeypatch.setattr("rutina_ia.claude_code.available", lambda: True)
+    assert api.resolve_engine("auto") == "determinista"
+
+
+def test_el_documento_nombra_el_motor_usado(result, profile, catalog):
+    html = render_html(result, profile, catalog)
+    assert "planificador determinista" in html
+
+    result.engine = "suscripcion"
+    assert "Claude (suscripción)" in render_html(result, profile, catalog)
+    result.engine = "determinista"

@@ -15,8 +15,9 @@ from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import config
+from . import claude_code, config
 from .catalog import get_catalog
+from .engine import GenerationError
 from .export import render_html, render_markdown
 from .fallback import NoViablePlan, plan_routine
 from .models import JOINTS, Profile, Routine, RoutineResult
@@ -41,15 +42,21 @@ if config.MEDIA_DIR.is_dir():
 # ---------------------------------------------------------------------------
 
 
+ENGINE_CHOICES = ("auto", "suscripcion", "api", "determinista")
+
+
 class GenerateRequest(BaseModel):
     profile: Profile
-    engine: str = Field("auto", description="auto | ia | determinista")
+    engine: str = Field(
+        "auto", description="auto | suscripcion | api | determinista"
+    )
 
 
 class AdaptRequest(BaseModel):
     profile: Profile
     routine: Routine
     request: str = Field(min_length=1, max_length=2000)
+    engine: str = Field("auto", description="auto | suscripcion | api")
 
 
 class DocumentRequest(BaseModel):
@@ -62,23 +69,59 @@ class DocumentRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _use_ai(engine: str) -> bool:
-    if engine == "determinista":
-        return False
-    if engine == "ia":
+def resolve_engine(requested: str) -> str:
+    """Traduce el motor pedido al que se va a usar de verdad.
+
+    «auto» prefiere la suscripción a la clave de API: si tienes Claude Code
+    con sesión iniciada, generar una rutina no debería costarte saldo aparte.
+    """
+    if requested not in ENGINE_CHOICES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Motor desconocido «{requested}». Opciones: {', '.join(ENGINE_CHOICES)}.",
+        )
+
+    if requested == "auto" and config.DEFAULT_ENGINE != "auto":
+        requested = config.DEFAULT_ENGINE
+
+    if requested == "suscripcion":
+        if not claude_code.available():
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "No se encontró el ejecutable de Claude Code en esta máquina. "
+                    "Instálalo e inicia sesión con `claude login`, o usa el motor "
+                    "«api» con ANTHROPIC_API_KEY."
+                ),
+            )
+        return "suscripcion"
+
+    if requested == "api":
         if not config.has_api_key():
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "No hay credenciales de Anthropic configuradas. Define "
-                    "ANTHROPIC_API_KEY o usa el motor determinista."
+                    "No hay credenciales de API configuradas. Define "
+                    "ANTHROPIC_API_KEY, usa el motor «suscripcion» o el determinista."
                 ),
             )
-        return True
-    return config.has_api_key()
+        return "api"
+
+    if requested == "determinista":
+        return "determinista"
+
+    # auto: suscripción primero, API después, plantillas como último recurso.
+    if claude_code.available():
+        return "suscripcion"
+    if config.has_api_key():
+        return "api"
+    return "determinista"
 
 
-def _ai_module():
+def _model_backend(engine: str):
+    """Módulo que implementa `generate_routine` y `adapt_routine`."""
+    if engine == "suscripcion":
+        return claude_code
     # Import perezoso: sin clave configurada la app no debe requerir el SDK.
     from . import ai
 
@@ -110,43 +153,64 @@ def options() -> dict:
         ],
         "experience": ["principiante", "intermedio", "avanzado"],
         "exercise_count": len(catalog),
-        "ai_available": config.has_api_key(),
-        "model": config.MODEL if config.has_api_key() else None,
         "local_media": config.MEDIA_DIR.is_dir(),
+        "engines": {
+            "suscripcion": {
+                "available": claude_code.available(),
+                "label": "Suscripción (Claude Code)",
+                "detail": claude_code.version(),
+            },
+            "api": {
+                "available": config.has_api_key(),
+                "label": "API de Anthropic",
+                "detail": config.MODEL if config.has_api_key() else None,
+            },
+            "determinista": {
+                "available": True,
+                "label": "Planificador determinista",
+                "detail": "sin modelo, plantillas locales",
+            },
+        },
+        "active_engine": resolve_engine("auto"),
+        "model": config.MODEL,
     }
 
 
 @app.post("/api/routines", response_model=RoutineResult)
 def create_routine(payload: GenerateRequest) -> RoutineResult:
     catalog = get_catalog()
-    if _use_ai(payload.engine):
-        ai = _ai_module()
+    engine = resolve_engine(payload.engine)
+
+    if engine == "determinista":
         try:
-            return ai.generate_routine(payload.profile, catalog)
-        except ai.GenerationError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+            return plan_routine(payload.profile, catalog)
+        except NoViablePlan as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     try:
-        return plan_routine(payload.profile, catalog)
-    except NoViablePlan as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return _model_backend(engine).generate_routine(payload.profile, catalog)
+    except GenerationError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.post("/api/routines/adapt", response_model=RoutineResult)
 def adapt(payload: AdaptRequest) -> RoutineResult:
-    if not config.has_api_key():
+    engine = resolve_engine(payload.engine)
+    if engine == "determinista":
         raise HTTPException(
             status_code=400,
             detail=(
-                "Adaptar una rutina requiere IA. Configura ANTHROPIC_API_KEY o "
-                "regenera la rutina cambiando el perfil."
+                "Adaptar una rutina requiere un modelo. Inicia sesión en Claude "
+                "Code (`claude login`) para usar tu suscripción, define "
+                "ANTHROPIC_API_KEY, o regenera la rutina cambiando el perfil."
             ),
         )
-    ai = _ai_module()
+
     try:
-        return ai.adapt_routine(
+        return _model_backend(engine).adapt_routine(
             payload.profile, get_catalog(), payload.routine, payload.request
         )
-    except ai.GenerationError as exc:
+    except GenerationError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 

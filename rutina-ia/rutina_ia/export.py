@@ -27,6 +27,13 @@ TEMPLATES = Path(__file__).parent / "templates"
 ATTRIBUTION = "© Gym visual — https://gymvisual.com/"
 DATASET_URL = "https://github.com/hasaneyldrm/exercises-dataset"
 
+# Cómo se nombra en el documento el motor que produjo la rutina.
+ENGINE_LABELS = {
+    "suscripcion": "Claude (suscripción)",
+    "api": "Claude (API)",
+    "determinista": "planificador determinista",
+}
+
 _env = Environment(
     loader=FileSystemLoader(TEMPLATES),
     autoescape=select_autoescape(["html"]),
@@ -86,6 +93,7 @@ def render_html(
         routine=result.routine,
         issues=result.issues,
         engine=result.engine,
+        engine_label=ENGINE_LABELS.get(result.engine, result.engine),
         profile=profile,
         days=_rows(result.routine, catalog, embed_media),
         volume=sorted(weekly_sets(result.routine, catalog).items()),

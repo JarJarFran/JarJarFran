@@ -12,7 +12,7 @@ import types
 
 import pytest
 
-from rutina_ia import ai
+from rutina_ia import ai, engine
 from rutina_ia.catalog import get_catalog
 from rutina_ia.models import Profile
 
@@ -74,7 +74,9 @@ class FakeClient:
         self.messages = types.SimpleNamespace(stream=self._stream)
 
     def _stream(self, **kwargs):
-        self.calls.append(kwargs["messages"])
+        # Copia: el motor sigue añadiendo a la misma lista tras la llamada, y
+        # el test quiere ver el historial tal y como se envió.
+        self.calls.append(list(kwargs["messages"]))
         return FakeStream(self._responses.pop(0))
 
 
@@ -114,6 +116,14 @@ def _tool_message(payload: dict, tool_use_id: str = "toolu_1") -> FakeMessage:
     )
 
 
+def use_client(monkeypatch, client: FakeClient) -> None:
+    """Hace que el motor de API use el cliente falso en lugar de uno real."""
+    # La clase real se captura antes de parchear: si se resolviera dentro del
+    # lambda, se encontraría a sí misma.
+    real = ai.AnthropicEngine
+    monkeypatch.setattr(ai, "AnthropicEngine", lambda: real(client=client))
+
+
 # ---------------------------------------------------------------------------
 # Esquema de la herramienta
 # ---------------------------------------------------------------------------
@@ -142,11 +152,11 @@ def test_esquema_estricto_cierra_todos_los_objetos():
 
 def test_generacion_valida_a_la_primera(monkeypatch, catalog, profile):
     client = FakeClient([_tool_message(_routine_payload(catalog, "barbell full squat"))])
-    monkeypatch.setattr(ai, "_client", lambda: client)
+    use_client(monkeypatch, client)
 
     result = ai.generate_routine(profile, catalog)
 
-    assert result.engine == "ia"
+    assert result.engine == "api"
     assert result.repair_attempts == 0
     assert len(client.calls) == 1
     assert result.routine.days[0].blocks[0].sets == 4
@@ -157,7 +167,7 @@ def test_bucle_de_reparacion_devuelve_los_errores_al_modelo(monkeypatch, catalog
     malo = _routine_payload(catalog, "barbell full squat", rir=0)
     bueno = _routine_payload(catalog, "barbell full squat", rir=2)
     client = FakeClient([_tool_message(malo), _tool_message(bueno)])
-    monkeypatch.setattr(ai, "_client", lambda: client)
+    use_client(monkeypatch, client)
 
     result = ai.generate_routine(profile, catalog)
 
@@ -176,12 +186,12 @@ def test_bucle_de_reparacion_devuelve_los_errores_al_modelo(monkeypatch, catalog
 
 def test_se_agotan_los_reintentos_y_se_devuelve_con_avisos(monkeypatch, catalog, profile):
     malo = _routine_payload(catalog, "barbell full squat", rir=0)
-    client = FakeClient([_tool_message(malo)] * (ai.MAX_REPAIR_ATTEMPTS + 1))
-    monkeypatch.setattr(ai, "_client", lambda: client)
+    client = FakeClient([_tool_message(malo)] * (engine.MAX_REPAIR_ATTEMPTS + 1))
+    use_client(monkeypatch, client)
 
     result = ai.generate_routine(profile, catalog)
 
-    assert result.repair_attempts == ai.MAX_REPAIR_ATTEMPTS
+    assert result.repair_attempts == engine.MAX_REPAIR_ATTEMPTS
     assert any(issue.code == "RIR_BAJO" for issue in result.issues)
 
 
@@ -190,7 +200,7 @@ def test_valores_fuera_de_rango_se_devuelven_para_correccion(monkeypatch, catalo
     malo = _routine_payload(catalog, "barbell full squat", sets=12)
     bueno = _routine_payload(catalog, "barbell full squat", sets=4)
     client = FakeClient([_tool_message(malo), _tool_message(bueno)])
-    monkeypatch.setattr(ai, "_client", lambda: client)
+    use_client(monkeypatch, client)
 
     result = ai.generate_routine(profile, catalog)
 
@@ -203,10 +213,10 @@ def test_valores_fuera_de_rango_se_devuelven_para_correccion(monkeypatch, catalo
 
 def test_valores_fuera_de_rango_persistentes_dan_error_claro(monkeypatch, catalog, profile):
     malo = _routine_payload(catalog, "barbell full squat", sets=12)
-    client = FakeClient([_tool_message(malo)] * (ai.MAX_REPAIR_ATTEMPTS + 1))
-    monkeypatch.setattr(ai, "_client", lambda: client)
+    client = FakeClient([_tool_message(malo)] * (engine.MAX_REPAIR_ATTEMPTS + 1))
+    use_client(monkeypatch, client)
 
-    with pytest.raises(ai.GenerationError, match="fuera de rango"):
+    with pytest.raises(engine.GenerationError, match="fuera de rango"):
         ai.generate_routine(profile, catalog)
 
 
@@ -221,8 +231,8 @@ def test_ejercicio_contraindicado_se_rechaza_aunque_lo_proponga_el_modelo(
         injuries=["lumbar"],
     )
     payload = _routine_payload(catalog, "barbell deadlift")
-    client = FakeClient([_tool_message(payload)] * (ai.MAX_REPAIR_ATTEMPTS + 1))
-    monkeypatch.setattr(ai, "_client", lambda: client)
+    client = FakeClient([_tool_message(payload)] * (engine.MAX_REPAIR_ATTEMPTS + 1))
+    use_client(monkeypatch, client)
 
     result = ai.generate_routine(profile, catalog)
 
@@ -233,19 +243,19 @@ def test_respuesta_sin_herramienta_se_reintenta(monkeypatch, catalog, profile):
     texto = FakeMessage([FakeBlock("text", text="Aquí tienes tu rutina...")], "end_turn")
     bueno = _tool_message(_routine_payload(catalog, "barbell full squat"))
     client = FakeClient([texto, bueno])
-    monkeypatch.setattr(ai, "_client", lambda: client)
+    use_client(monkeypatch, client)
 
     result = ai.generate_routine(profile, catalog)
 
     assert len(client.calls) == 2
-    assert "emit_routine" in client.calls[1][-1]["content"]
+    assert "No has devuelto la rutina" in client.calls[1][-1]["content"]
 
 
 def test_rechazo_del_modelo_es_error_explicito(monkeypatch, catalog, profile):
     client = FakeClient([FakeMessage([], stop_reason="refusal")])
-    monkeypatch.setattr(ai, "_client", lambda: client)
+    use_client(monkeypatch, client)
 
-    with pytest.raises(ai.GenerationError, match="declinado"):
+    with pytest.raises(engine.GenerationError, match="declinado"):
         ai.generate_routine(profile, catalog)
 
 
@@ -254,7 +264,7 @@ def test_sin_candidatos_error_util(monkeypatch, catalog):
         equipment=["barbell"],
         injuries=["hombro", "lumbar", "rodilla", "codo", "muneca", "cadera", "cuello"],
     )
-    with pytest.raises(ai.GenerationError, match="No queda ningún ejercicio"):
+    with pytest.raises(engine.GenerationError, match="No queda ningún ejercicio"):
         ai.generate_routine(profile, catalog)
 
 
@@ -268,7 +278,7 @@ def test_adaptacion_envia_la_rutina_actual_y_la_peticion(monkeypatch, catalog, p
 
     actual = plan_routine(profile, catalog).routine
     client = FakeClient([_tool_message(_routine_payload(catalog, "barbell full squat"))])
-    monkeypatch.setattr(ai, "_client", lambda: client)
+    use_client(monkeypatch, client)
 
     ai.adapt_routine(profile, catalog, actual, "quita la sentadilla, me molesta la rodilla")
 
@@ -287,9 +297,9 @@ def test_el_prompt_solo_ofrece_ejercicios_permitidos(monkeypatch, catalog):
     )
     client = FakeClient(
         [_tool_message(_routine_payload(catalog, "barbell full squat"))]
-        * (ai.MAX_REPAIR_ATTEMPTS + 1)
+        * (engine.MAX_REPAIR_ATTEMPTS + 1)
     )
-    monkeypatch.setattr(ai, "_client", lambda: client)
+    use_client(monkeypatch, client)
 
     ai.generate_routine(profile, catalog)
 

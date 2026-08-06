@@ -44,14 +44,39 @@ class Block(BaseModel):
     role: Literal["principal", "secundario", "accesorio", "core", "movilidad"] = "accesorio"
     notes: str = ""
 
+    def is_timed(self) -> bool:
+        """¿La prescripción es una duración y no un número de repeticiones?
+
+        Planchas y estiramientos se prescriben en segundos («30 s»). Compararlos
+        contra un rango de repeticiones no significa nada: 30 segundos de
+        plancha no son 30 repeticiones de nada.
+        """
+        lowered = self.reps.lower()
+        return any(unit in lowered for unit in ("s", "seg", "min", "'", '"'))
+
+    def _numbers(self) -> list[int]:
+        return [int(part) for part in "".join(
+            c if c.isdigit() else " " for c in self.reps
+        ).split()]
+
     def min_reps(self) -> int | None:
         """Extremo inferior del rango de repeticiones, si es numérico."""
-        digits = "".join(c if c.isdigit() else " " for c in self.reps).split()
-        return int(digits[0]) if digits else None
+        numbers = self._numbers()
+        return numbers[0] if numbers else None
 
     def max_reps(self) -> int | None:
-        digits = "".join(c if c.isdigit() else " " for c in self.reps).split()
-        return int(digits[-1]) if digits else None
+        numbers = self._numbers()
+        return numbers[-1] if numbers else None
+
+    def seconds(self) -> int | None:
+        """Duración en segundos de un bloque isométrico."""
+        if not self.is_timed():
+            return None
+        numbers = self._numbers()
+        if not numbers:
+            return None
+        value = numbers[-1]
+        return value * 60 if "min" in self.reps.lower() else value
 
 
 class Day(BaseModel):
@@ -84,10 +109,17 @@ class Issue(BaseModel):
     message: str
 
 
+# Cómo se generó la rutina:
+#   api          — API de Anthropic con clave propia, facturada por uso
+#   suscripcion  — CLI de Claude Code, con la sesión que ya tenga el usuario
+#   determinista — plantillas locales, sin modelo
+Engine = Literal["api", "suscripcion", "determinista"]
+
+
 class RoutineResult(BaseModel):
     """Rutina + trazabilidad de cómo se produjo."""
 
     routine: Routine
     issues: list[Issue] = Field(default_factory=list)
-    engine: Literal["ia", "determinista"] = "ia"
+    engine: Engine = "api"
     repair_attempts: int = 0

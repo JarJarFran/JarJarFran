@@ -102,6 +102,10 @@ MIN_FREQUENCY_MAJOR = 2
 SECONDS_PER_REP = 4
 WARMUP_SECONDS = 600
 
+# Duración razonable de un isométrico (plancha, estiramiento mantenido).
+MIN_HOLD_SECONDS = 10
+MAX_HOLD_SECONDS = 120
+
 
 def weekly_sets(routine: Routine, catalog: Catalog) -> dict[str, int]:
     """Series semanales por grupo muscular.
@@ -171,8 +175,13 @@ def estimate_minutes(day_blocks: list[Block], catalog: Catalog) -> int:
     """Duración estimada de una sesión, calentamiento incluido."""
     seconds = WARMUP_SECONDS
     for block in day_blocks:
-        reps = block.max_reps() or 10
-        work = min(reps, 30) * SECONDS_PER_REP
+        # Un isométrico dura lo que dice; una serie de repeticiones, lo que
+        # tarden esas repeticiones.
+        hold = block.seconds()
+        if hold is not None:
+            work = hold
+        else:
+            work = min(block.max_reps() or 10, 30) * SECONDS_PER_REP
         seconds += block.sets * (work + block.rest_seconds)
     return round(seconds / 60)
 
@@ -250,20 +259,39 @@ def validate(routine: Routine, profile: Profile, catalog: Catalog) -> list[Issue
                     )
                 )
 
-            low, high = rep_ranges[block.role]
-            block_min, block_max = block.min_reps(), block.max_reps()
-            if block_min is not None and (block_min < low or (block_max or block_min) > high):
-                issues.append(
-                    Issue(
-                        severity="aviso",
-                        code="REPS_FUERA_RANGO",
-                        message=(
-                            f"«{exercise.name}» prescribe {block.reps} repeticiones "
-                            f"como {block.role}; para objetivo {profile.goal} el rango "
-                            f"es {low}-{high}."
-                        ),
+            if block.is_timed():
+                # Isométrico: se comprueba la duración, no el rango de reps.
+                seconds = block.seconds()
+                if seconds is not None and not (
+                    MIN_HOLD_SECONDS <= seconds <= MAX_HOLD_SECONDS
+                ):
+                    issues.append(
+                        Issue(
+                            severity="aviso",
+                            code="DURACION_ISOMETRICA",
+                            message=(
+                                f"«{exercise.name}» se mantiene {block.reps}; lo útil "
+                                f"está entre {MIN_HOLD_SECONDS} y {MAX_HOLD_SECONDS} s."
+                            ),
+                        )
                     )
-                )
+            else:
+                low, high = rep_ranges[block.role]
+                block_min, block_max = block.min_reps(), block.max_reps()
+                if block_min is not None and (
+                    block_min < low or (block_max or block_min) > high
+                ):
+                    issues.append(
+                        Issue(
+                            severity="aviso",
+                            code="REPS_FUERA_RANGO",
+                            message=(
+                                f"«{exercise.name}» prescribe {block.reps} repeticiones "
+                                f"como {block.role}; para objetivo {profile.goal} el "
+                                f"rango es {low}-{high}."
+                            ),
+                        )
+                    )
 
             if block.rir < min_rir:
                 issues.append(

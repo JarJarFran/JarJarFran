@@ -31,6 +31,18 @@ MAX_REPAIR_ATTEMPTS = int(os.getenv("RUTINA_IA_MAX_REPAIRS", "2"))
 MAX_CANDIDATES = int(os.getenv("RUTINA_IA_MAX_CANDIDATES", "260"))
 
 
+# --- Motor de suscripción (CLI de Claude Code) -----------------------------
+# Permite usar una suscripción Pro o Max en lugar de una clave de API. Requiere
+# Claude Code instalado y con sesión iniciada en esta máquina.
+CLAUDE_CODE_BIN = os.getenv("RUTINA_IA_CLAUDE_CODE_BIN", "claude")
+CLAUDE_CODE_TIMEOUT = int(os.getenv("RUTINA_IA_CLAUDE_CODE_TIMEOUT", "420"))
+
+# Motor por defecto cuando la petición pide "auto":
+#   suscripcion → api → determinista, en ese orden de preferencia.
+# Se puede fijar uno concreto con RUTINA_IA_ENGINE.
+DEFAULT_ENGINE = os.getenv("RUTINA_IA_ENGINE", "auto")
+
+
 def has_api_key() -> bool:
-    """La app funciona sin clave: cae al planificador determinista."""
+    """¿Hay credenciales de API con las que facturar por uso?"""
     return bool(os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"))

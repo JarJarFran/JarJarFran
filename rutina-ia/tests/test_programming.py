@@ -234,3 +234,49 @@ def test_planificador_respeta_las_lesiones(catalog, injuries):
     for block in result.routine.all_blocks():
         exercise = catalog.get(block.exercise_id)
         assert not set(injuries).intersection(exercise.joints)
+
+
+# ---------------------------------------------------------------------------
+# Isométricos: se miden en segundos, no en repeticiones
+# ---------------------------------------------------------------------------
+
+
+def test_una_plancha_de_30_s_no_es_30_repeticiones(catalog, profile):
+    """Regresión: «30 s» se comparaba contra el rango de reps y avisaba en falso."""
+    plancha = _find(catalog, "front plank with twist")
+    routine = _routine_with(
+        catalog,
+        [
+            Block(
+                exercise_id=plancha, sets=3, reps="30 s", rir=2, rest_seconds=60,
+                role="core",
+            )
+        ],
+    )
+    codes = {issue.code for issue in validate(routine, profile, catalog)}
+    assert "REPS_FUERA_RANGO" not in codes
+    assert "DURACION_ISOMETRICA" not in codes
+
+
+def test_isometrico_absurdamente_largo_avisa(catalog, profile):
+    plancha = _find(catalog, "front plank with twist")
+    routine = _routine_with(
+        catalog,
+        [
+            Block(
+                exercise_id=plancha, sets=3, reps="600 s", rir=2, rest_seconds=60,
+                role="core",
+            )
+        ],
+    )
+    codes = {issue.code for issue in validate(routine, profile, catalog)}
+    assert "DURACION_ISOMETRICA" in codes
+
+
+def test_la_duracion_estimada_cuenta_los_segundos_del_isometrico(catalog):
+    plancha = _find(catalog, "front plank with twist")
+    timed = [
+        Block(exercise_id=plancha, sets=3, reps="30 s", rir=2, rest_seconds=60, role="core")
+    ]
+    # 10 min de calentamiento + 3 × (30 s de plancha + 60 s de descanso) = 14,5 min
+    assert 14 <= estimate_minutes(timed, catalog) <= 15

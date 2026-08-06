@@ -107,7 +107,7 @@
   {% if profile.injuries %}
   <li>Lesiones: {{ profile.injuries | join(', ') }}</li>
   {% endif %}
-  <li>Generado por: {{ 'IA' if engine == 'ia' else 'planificador determinista' }}</li>
+  <li>Generado por: {{ engine_label }}</li>
 </ul>
 
 {% if routine.safety_notes %}

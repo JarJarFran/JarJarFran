@@ -92,9 +92,7 @@ async function boot() {
     injuries.append(chip("injuries", joint, joint));
   }
 
-  $("engine-badge").textContent = options.ai_available
-    ? `IA activa · ${options.model}`
-    : "Sin clave de API · planificador determinista";
+  buildEngineSelector(options);
   $("catalog-note").textContent = `${options.exercise_count} ejercicios en catálogo.`;
 
   const quick = [
@@ -111,6 +109,46 @@ async function boot() {
     button.addEventListener("click", () => { $("adapt-text").value = text; });
     $("quick-adapts").append(button);
   }
+}
+
+// Textos de ayuda por motor: lo que cambia entre ellos no es el resultado
+// —el validador es el mismo— sino quién paga y qué hace falta tener instalado.
+const ENGINE_HINTS = {
+  suscripcion:
+    "Usa la sesión de Claude Code de esta máquina, así que consume de tu plan " +
+    "Pro/Max en vez de saldo de API. Requiere `claude login`.",
+  api: "Llama a la API de Anthropic con tu clave. Se factura por uso.",
+  determinista:
+    "Sin modelo: plantillas locales validadas. No puede adaptar rutinas por " +
+    "lenguaje natural.",
+};
+
+function buildEngineSelector(options) {
+  const select = $("engine");
+  const engines = options.engines || {};
+  const active = options.active_engine;
+
+  select.append(new Option("Automático", "auto"));
+  for (const [key, info] of Object.entries(engines)) {
+    const label = info.available
+      ? `${info.label}${info.detail ? ` · ${info.detail}` : ""}`
+      : `${info.label} (no disponible)`;
+    const option = new Option(label, key);
+    option.disabled = !info.available;
+    select.append(option);
+  }
+  select.value = "auto";
+
+  const describe = () => {
+    const chosen = select.value === "auto" ? active : select.value;
+    const info = engines[chosen];
+    $("engine-hint").textContent = ENGINE_HINTS[chosen] || "";
+    $("engine-badge").textContent = info
+      ? `${info.label}${select.value === "auto" ? " (automático)" : ""}`
+      : "—";
+  };
+  select.addEventListener("change", describe);
+  describe();
 }
 
 function readProfile() {
@@ -258,11 +296,11 @@ async function generate(event) {
     return;
   }
   button.disabled = true;
-  button.textContent = "Generando…";
+  button.textContent = "Generando… (puede tardar 1-2 min)";
   try {
     const response = await api("/api/routines", {
       profile: state.profile,
-      engine: "auto",
+      engine: $("engine").value,
     });
     state.result = await response.json();
     state.history = [];
@@ -296,6 +334,7 @@ async function adapt(event) {
       profile: state.profile,
       routine: state.result.routine,
       request: text,
+      engine: $("engine").value,
     });
     state.result = await response.json();
     state.history.push(text);
