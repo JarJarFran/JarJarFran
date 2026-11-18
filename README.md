@@ -15,15 +15,16 @@ Install it with `brew install JarJarFran/espetero/espetero`.
 **Merged**
 - [vllm-project/vllm-metal#1193](https://github.com/vllm-project/vllm-metal/pull/1193): serve images on MLX-quantized Qwen3.5/3.6 MoE checkpoints
 - [jundot/omlx#4712](https://github.com/jundot/omlx/pull/4712): keep system notes after a tool result out of the leading system block
-- [antranapp/awesome-mlx#55](https://github.com/antranapp/awesome-mlx/pull/55): add Espetero
+- [Neywa-Labs/mlx-vlm#2624](https://github.com/Neywa-Labs/mlx-vlm/pull/2624): keep the source `tokenizer.json` when converting Qwen3.5-family models
+- [antranapp/awesome-mlx#55](https://github.com/antranapp/awesome-mlx/pull/55) and [sihyeong/Awesome-LLM-Inference-Engine#25](https://github.com/sihyeong/Awesome-LLM-Inference-Engine/pull/25): add Espetero
 
 **In review**
 - [jundot/omlx#4842](https://github.com/jundot/omlx/pull/4842): MoE offload releases only the expert slots a prefill needs
 - [jundot/omlx#4762](https://github.com/jundot/omlx/pull/4762): snapshot and protect the system prefix of hybrid models in the cache
 - [jundot/omlx#4891](https://github.com/jundot/omlx/pull/4891): enforce `required` and named `tool_choice` on chat completions
-- [Blaizzy/mlx-vlm#2597](https://github.com/Blaizzy/mlx-vlm/pull/2597): keep MTP speculative decoding for `response_format` requests
-- [Blaizzy/mlx-vlm#2595](https://github.com/Blaizzy/mlx-vlm/pull/2595): add the Kev decision models
-- [Blaizzy/mlx-vlm#2564](https://github.com/Blaizzy/mlx-vlm/pull/2564): share storage between fused GDN decode projections and their sources
+- [Neywa-Labs/mlx-vlm#2597](https://github.com/Neywa-Labs/mlx-vlm/pull/2597): keep MTP speculative decoding for `response_format` requests
+- [Neywa-Labs/mlx-vlm#2595](https://github.com/Neywa-Labs/mlx-vlm/pull/2595): add the Kev decision models
+- [Neywa-Labs/mlx-vlm#2564](https://github.com/Neywa-Labs/mlx-vlm/pull/2564): share storage between fused GDN decode projections and their sources
 
 **Benchmarks and reports for maintainers**
 - [vllm-project/vllm-metal#1185](https://github.com/vllm-project/vllm-metal/pull/1185) and [#1159](https://github.com/vllm-project/vllm-metal/pull/1159) (both merged): M1 Max serving and decode-split measurements, with Metal System Traces
